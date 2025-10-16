@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  MANAGER
+  ADMIN
+}
+
+enum StatusCustomer {
+  AKTIF
+  NON_AKTIF
+}
+
+enum StatusVisit {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
+enum StatusRealisasi {
+  TEREALISASI
+  TIDAK_TEREALISASI
+}
+
+enum HasilVisit {
+  DEAL
+  TIDAK_DEAL
+  SILATURAHMI
+  LAINNYA
+}
+
+enum NotificationType {
+  REMINDER_VISIT
+  INFO
+}
+
+model User {
+  id            String    @id @default(uuid())
+  username      String    @unique
+  password      String
+  namaLengkap   String    @map("nama_lengkap")
+  email         String    @unique
+  role          Role      @default(USER)
+  managerId     String?   @map("manager_id")
+  manager       User?     @relation("ManagerToUser", fields: [managerId], references: [id])
+  subordinates  User[]    @relation("ManagerToUser")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  visitPlans    VisitPlan[]
+  customers     Customer[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Customer {
+  id            String          @id @default(uuid())
+  namaCustomer  String          @map("nama_customer")
+  alamat        String
+  telepon       String
+  email         String
+  picName       String          @map("pic_name")
+  status        StatusCustomer  @default(AKTIF)
+  createdBy     String          @map("created_by")
+  creator       User            @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  
+  visitPlans    VisitPlan[]
+
+  @@map("customers")
+}
+
+model VisitPlan {
+  id                  String        @id @default(uuid())
+  userId              String        @map("user_id")
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId          String        @map("customer_id")
+  customer            Customer      @relation(fields: [customerId], references: [id])
+  tanggalVisit        DateTime      @map("tanggal_visit") @db.Date
+  tujuanVisit         String        @map("tujuan_visit") @db.Text
+  programPembahasan   String        @map("program_pembahasan") @db.Text
+  revenueTarget       Decimal       @map("revenue_target") @db.Decimal(15, 2)
+  status              StatusVisit   @default(PLANNED)
+  isEditable          Boolean       @default(true) @map("is_editable")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  
+  report              VisitReport?
+
+  @@map("visit_plans")
+}
+
+model VisitReport {
+  id                String          @id @default(uuid())
+  visitPlanId       String          @unique @map("visit_plan_id")
+  visitPlan         VisitPlan       @relation(fields: [visitPlanId], references: [id], onDelete: Cascade)
+  tanggalRealisasi  DateTime        @default(now()) @map("tanggal_realisasi") @db.Date
+  statusRealisasi   StatusRealisasi @default(TEREALISASI) @map("status_realisasi")
+  hasilVisit        HasilVisit?     @map("hasil_visit")
+  revenueActual     Decimal?        @map("revenue_actual") @db.Decimal(15, 2)
+  catatan           String?         @db.Text
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@map("visit_reports")
+}
+
+
+model Notification {
+  id        String            @id @default(uuid())
+  userId    String            @map("user_id")
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String            @db.Text
+  type      NotificationType  @default(REMINDER_VISIT)
+  isRead    Boolean           @default(false) @map("is_read")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
