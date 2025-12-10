@@ -110,48 +110,52 @@ const getReportById = async (req, res) => {
   }
 };
 
-// Create visit report (setelah visit selesai)
-// Create visit report (setelah visit selesai)
-// Create visit report (setelah visit selesai)
 const createReport = async (req, res) => {
   try {
-    const { visitPlanId, statusRealisasi, hasilVisit, revenueActual, catatan } = req.body;
+    const { visitPlanId, statusRealisasi, hasilVisit, kategori, revenueActual, catatan, pic, cpPic, updateVisitPlanStatus } = req.body;
 
     if (!visitPlanId) {
       return res.status(400).json({ success: false, message: 'Visit plan ID is required' });
     }
 
-    // Cek apakah visit plan ada
     const visitPlan = await prisma.visitPlan.findUnique({ where: { id: visitPlanId } });
 
     if (!visitPlan) {
       return res.status(404).json({ success: false, message: 'Visit plan not found' });
     }
 
-    // Cek apakah sudah ada report untuk visit plan ini
     const existingReport = await prisma.visitReport.findUnique({ where: { visitPlanId } });
 
     if (existingReport) {
       return res.status(400).json({ success: false, message: 'Report already exists for this visit plan' });
     }
 
-    // Create report
     const newReport = await prisma.visitReport.create({
       data: {
         visitPlanId,
         statusRealisasi: statusRealisasi || 'TEREALISASI',
-        hasilVisit: hasilVisit || null,
+        hasilVisit: hasilVisit ? hasilVisit.toUpperCase() : null,  // ← Normalize ke uppercase
+        kategori: kategori || null,
         revenueActual: revenueActual ? parseFloat(revenueActual) : null,
-        catatan: catatan || null
+        pic: pic || null,
+        cpPic: cpPic || null,
+        // catatan dihapus sepenuhnya
       }
     });
 
-    // Update visit plan status
-    const newStatus = statusRealisasi === 'TIDAK_TEREALISASI' ? 'CANCELLED' : 'COMPLETED';
-    await prisma.visitPlan.update({
-      where: { id: visitPlanId },
-      data: { status: newStatus }
-    });
+    if (updateVisitPlanStatus) {
+      await prisma.visitPlan.update({
+        where: { id: visitPlanId },
+        data: { status: 'COMPLETED' }
+      });
+    } else {
+      // Update default status based on realization status if flag tidak diset
+      const newStatus = statusRealisasi === 'TIDAK_TEREALISASI' ? 'CANCELLED' : 'COMPLETED';
+      await prisma.visitPlan.update({
+        where: { id: visitPlanId },
+        data: { status: newStatus }
+      });
+    }
 
     res.status(201).json({ success: true, message: 'Visit report created', data: newReport });
   } catch (error) {
@@ -161,12 +165,10 @@ const createReport = async (req, res) => {
 };
 
 
-// Update visit report
-// Update visit report
 const updateReport = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes, revenueRealisasi, fotoKegiatan } = req.body;
+    const { statusRealisasi, hasilVisit, kategori, revenueActual, pic, cpPic } = req.body;
 
     const report = await prisma.visitReport.findUnique({ where: { id } });
 
@@ -177,22 +179,23 @@ const updateReport = async (req, res) => {
     const updatedReport = await prisma.visitReport.update({
       where: { id },
       data: {
-        status,
-        notes,
-        revenueRealisasi: revenueRealisasi ? parseFloat(revenueRealisasi) : undefined,
-        fotoKegiatan,
-        tanggalRealisasi: new Date(),
-        statusRealisasi: status || report.statusRealisasi // ← TAMBAHKAN INI
+        statusRealisasi: statusRealisasi || report.statusRealisasi,
+        hasilVisit: hasilVisit ? hasilVisit.toUpperCase() : report.hasilVisit,  // ← Normalize & uppercase
+        kategori: kategori !== undefined ? kategori : report.kategori,
+        revenueActual: revenueActual !== undefined ? parseFloat(revenueActual) : report.revenueActual,
+        pic: pic !== undefined ? pic : report.pic,
+        cpPic: cpPic !== undefined ? cpPic : report.cpPic,
+        // catatan dihapus sepenuhnya
+        tanggalRealisasi: new Date()
       }
     });
 
-    // Update visit plan status juga
-    if (status) {
-      await prisma.visitPlan.update({
-        where: { id: report.visitPlanId },
-        data: { status }
-      });
-    }
+    // Update visit plan status juga (optional)
+    const newStatus = statusRealisasi === 'TIDAK_TEREALISASI' ? 'CANCELLED' : 'COMPLETED';
+    await prisma.visitPlan.update({
+      where: { id: report.visitPlanId },
+      data: { status: newStatus }
+    });
 
     res.json({ success: true, message: 'Report updated', data: updatedReport });
   } catch (error) {
@@ -200,6 +203,8 @@ const updateReport = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to update report' });
   }
 };
+
+
 
 
 // Delete report (Admin only)

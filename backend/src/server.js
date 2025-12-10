@@ -5,6 +5,11 @@ const dotenv = require('dotenv');
 // Load environment variables
 dotenv.config();
 
+const app = express(); // <-- DEKLARASI DULU DI ATAS
+
+// POSISI PALING ATAS
+app.use(cors());
+
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -14,26 +19,27 @@ const visitReportRoutes = require('./routes/visitReportRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const profileRoutes = require('./routes/profileRoutes');
+const importCustomersRouter = require('./routes/importCustomers');
 
-const app = express();
+// Route khusus upload file HARUS sebelah atas sebelum body parser!
+app.use('/import', importCustomersRouter);
 
-// Middleware
-app.use(cors());
+// Middleware untuk JSON dan urlencoded
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/visit-plans', visitPlanRoutes);
-app.use('/api/visit-reports', visitReportRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/profile', profileRoutes);
+// Route lain...
+app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
+app.use('/customers', customerRoutes);
+app.use('/visit-plans', visitPlanRoutes);
+app.use('/visit-reports', visitReportRoutes);
+app.use('/notifications', notificationRoutes);
+app.use('/dashboard', dashboardRoutes);
+app.use('/profile', profileRoutes);
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Visiting Plane API is running' });
 });
 

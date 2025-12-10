@@ -1,61 +1,74 @@
 import { create } from 'zustand';
-import Cookies from 'js-cookie';
-import api from '../lib/api.js';
+import { persist } from 'zustand/middleware';
+import api from '../lib/api';
+import { useRouter } from 'next/navigation';
 
-const useAuthStore = create((set) => ({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  isLoading: false,
+const useAuthStore = create(
+  persist(
+    (set, get) => ({
+      user: null,
+      token: null,
+      isAuthenticated: false,
 
-  initAuth: () => {
-    const token = Cookies.get('token');
-    const userStr = Cookies.get('user');
-    
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        set({ user, token, isAuthenticated: true });
-      } catch (error) {
-        console.error('Failed to parse user data:', error);
-        Cookies.remove('token');
-        Cookies.remove('user');
-      }
+      // Login
+      login: async (username, password) => {
+        try {
+          const response = await api.post('/auth/login', { username, password });
+          const { user, token } = response.data.data;
+
+          // Set token to API headers
+          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          
+          // Update state
+          set({ user, token, isAuthenticated: true });
+          
+          return { success: true };
+        } catch (error) {
+          console.error('Login error:', error);
+          return { 
+            success: false, 
+            message: error.response?.data?.message || 'Login failed' 
+          };
+        }
+      },
+
+      // Logout
+      logout: () => {
+        // Clear token from API headers
+        delete api.defaults.headers.common['Authorization'];
+        
+        // Clear state
+        set({ user: null, token: null, isAuthenticated: false });
+        
+        // Redirect to login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+      },
+
+      // Initialize auth from localStorage
+      initializeAuth: () => {
+        const state = get();
+        if (state.token) {
+          api.defaults.headers.common['Authorization'] = `Bearer ${state.token}`;
+        }
+      },
+    }),
+    {
+      name: 'auth-storage',
+      // Force rehydration on mount
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
-  },
+  )
+);
 
-  login: async (username, password) => {
-    set({ isLoading: true });
-    try {
-      const response = await api.post('/auth/login', { username, password });
-      const { token, user } = response.data.data;
-
-      Cookies.set('token', token, { expires: 7 });
-      Cookies.set('user', JSON.stringify(user), { expires: 7 });
-
-      set({ user, token, isAuthenticated: true, isLoading: false });
-      return { success: true };
-    } catch (error) {
-      set({ isLoading: false });
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Login failed',
-      };
-    }
-  },
-
-  logout: () => {
-    Cookies.remove('token');
-    Cookies.remove('user');
-    set({ user: null, token: null, isAuthenticated: false });
-    window.location.href = '/login';
-  },
-
-  updateUser: (userData) => {
-    const updatedUser = { ...useAuthStore.getState().user, ...userData };
-    Cookies.set('user', JSON.stringify(updatedUser), { expires: 7 });
-    set({ user: updatedUser });
-  },
-}));
+// Initialize auth on store creation
+if (typeof window !== 'undefined') {
+  useAuthStore.getState().initializeAuth();
+}
 
 export default useAuthStore;

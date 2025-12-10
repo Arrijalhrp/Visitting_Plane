@@ -6,3 +6,24 @@ body {
   margin: 0;
   padding: 0;
 }
+.react-select__control {
+  @apply border rounded-lg py-1 px-1 min-h-[42px];
+}
+.react-select__input {
+  @apply px-3 py-2;
+}
+.react-select__menu {
+  @apply z-50;
+}
+.react-select__option {
+  @apply px-3 py-2 cursor-pointer;
+}
+.react-select__single-value {
+  @apply text-gray-800;
+}
+.react-select__indicator {
+  @apply text-gray-500;
+}
+.react-select__placeholder {
+  @apply text-gray-400;
+}

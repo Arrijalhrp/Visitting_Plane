@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '../../store/authStore.js';
 import { Lock, User, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isAuthenticated, initAuth, isLoading } = useAuthStore();
+  const { login, isLoading } = useAuthStore();
 
   const [formData, setFormData] = useState({
     username: '',
@@ -16,18 +16,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  // Initialize auth on mount
-  useEffect(() => {
-    initAuth();
-  }, [initAuth]);
-
-  // Redirect jika sudah login
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.push('/dashboard');
-    }
-  }, [isAuthenticated, router]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -35,7 +23,8 @@ export default function LoginPage() {
     const result = await login(formData.username, formData.password);
 
     if (result.success) {
-      router.push('/dashboard');
+      // Hard redirect untuk trigger middleware
+      window.location.href = '/dashboard';
     } else {
       setError(result.message);
     }
@@ -51,7 +40,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="w-full max-w-md px-6">
-        {/* Logo & Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mb-4">
             <span className="text-2xl font-bold text-white">VP</span>
@@ -64,7 +52,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Login Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Login</h2>
 
@@ -75,7 +62,6 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Username Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Username
@@ -96,7 +82,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Password
@@ -128,7 +113,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
@@ -138,18 +122,16 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo Credentials */}
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-600 mb-2 font-medium">
               Demo Credentials:
             </p>
             <div className="space-y-1 text-xs text-gray-500">
-              <p>👤 Admin: admin / admin123</p>
+              <p>👤 Admin: admin / admin456</p>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-sm text-gray-500 mt-6">
           © 2025 Telkom Indonesia. All rights reserved.
         </p>

@@ -13,6 +13,11 @@ enum Role {
   ADMIN
 }
 
+enum CustomerSource {
+  MANUAL
+  IMPORT
+}
+
 enum StatusCustomer {
   AKTIF
   NON_AKTIF
@@ -24,17 +29,24 @@ enum StatusVisit {
   CANCELLED
 }
 
+enum PicRole {
+  MANAGER
+  OFFICER
+  SALES_ENGINEER
+  SUPPORT_TIM
+}
+
 enum StatusRealisasi {
   TEREALISASI
   TIDAK_TEREALISASI
 }
 
-enum HasilVisit {
-  DEAL
-  TIDAK_DEAL
-  SILATURAHMI
-  LAINNYA
+
+enum KategoriCustomer {
+  HUNTING
+  FARMING
 }
+
 
 enum NotificationType {
   REMINDER_VISIT
@@ -64,6 +76,7 @@ model User {
 model Customer {
   id            String          @id @default(uuid())
   namaCustomer  String          @map("nama_customer")
+  nipNas        String?         @unique @map("nip_nas")
   alamat        String
   telepon       String
   email         String
@@ -73,24 +86,26 @@ model Customer {
   creator       User            @relation(fields: [createdBy], references: [id])
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
-  
   visitPlans    VisitPlan[]
-
+  source        CustomerSource  @default(MANUAL)
+  
   @@map("customers")
 }
+
 
 model VisitPlan {
   id                  String        @id @default(uuid())
   userId              String        @map("user_id")
   user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   customerId          String        @map("customer_id")
-  customer            Customer      @relation(fields: [customerId], references: [id])
+  customer            Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   tanggalVisit        DateTime      @map("tanggal_visit") @db.Date
   tujuanVisit         String        @map("tujuan_visit") @db.Text
   programPembahasan   String        @map("program_pembahasan") @db.Text
   revenueTarget       Decimal       @map("revenue_target") @db.Decimal(15, 2)
   status              StatusVisit   @default(PLANNED)
   isEditable          Boolean       @default(true) @map("is_editable")
+  kategori            KategoriCustomer  // <--- TAMBAH BARIS INI
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
   
@@ -99,17 +114,21 @@ model VisitPlan {
   @@map("visit_plans")
 }
 
+
 model VisitReport {
-  id                String          @id @default(uuid())
-  visitPlanId       String          @unique @map("visit_plan_id")
-  visitPlan         VisitPlan       @relation(fields: [visitPlanId], references: [id], onDelete: Cascade)
-  tanggalRealisasi  DateTime        @default(now()) @map("tanggal_realisasi") @db.Date
-  statusRealisasi   StatusRealisasi @default(TEREALISASI) @map("status_realisasi")
-  hasilVisit        HasilVisit?     @map("hasil_visit")
-  revenueActual     Decimal?        @map("revenue_actual") @db.Decimal(15, 2)
-  catatan           String?         @db.Text
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
+  id                String            @id @default(uuid())
+  visitPlanId       String            @unique @map("visit_plan_id")
+  visitPlan         VisitPlan         @relation(fields: [visitPlanId], references: [id], onDelete: Cascade)
+  tanggalRealisasi  DateTime          @default(now()) @map("tanggal_realisasi") @db.Date
+  statusRealisasi   StatusRealisasi   @default(TEREALISASI) @map("status_realisasi")
+  hasilVisit        String?           @map("hasil_visit")
+  kategori          KategoriCustomer? @map("kategori")
+  revenueActual     Decimal?          @map("revenue_actual") @db.Decimal(15, 2)
+  catatan           String?           @db.Text
+  pic               PicRole?          @map("pic")
+  cpPic             String?           @map("cp_pic")           
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   @@map("visit_reports")
 }

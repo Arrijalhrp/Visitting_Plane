@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Users, CalendarCheck, FileText, LogOut, Settings } from 'lucide-react';
@@ -9,6 +10,12 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
+  // Force rehydrate on mount
+  useEffect(() => {
+    useAuthStore.persist.rehydrate();
+  }, []);
+
+  // Base menu items for all roles
   const menuItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/customers', icon: Users, label: 'Customers' },
@@ -22,7 +29,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 flex flex-col">
+    <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 flex flex-col z-50">
       {/* Logo */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-3">
@@ -71,7 +78,9 @@ export default function Sidebar() {
             <p className="text-sm font-medium text-gray-900 truncate">
               {user?.namaLengkap || 'User'}
             </p>
-            <p className="text-xs text-gray-500">{user?.role || 'USER'}</p>
+            <p className="text-xs text-gray-500 capitalize">
+              {user?.role?.toLowerCase() || 'user'}
+            </p>
           </div>
         </div>
         

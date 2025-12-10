@@ -1,68 +1,94 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// Get dashboard summary (untuk semua role dengan filter berbeda)
 const getDashboardSummary = async (req, res) => {
   try {
     const { role, id: userId } = req.user;
+    // Ambil filter tanggal & user dari query
+    const { startDate, endDate, filterUserId } = req.query;
 
     let whereClause = {};
 
-    // Filter berdasarkan role
-    if (role === 'USER') {
-      whereClause = { userId };
+    // Filter user (khusus admin, bisa filterUserId manual)
+    // filterUserId = ID user yang ingin difilter pada dashboard
+    if (filterUserId) {
+      whereClause.userId = filterUserId;
+    } else if (role === 'USER') {
+      whereClause.userId = userId;
     } else if (role === 'MANAGER') {
       const subordinates = await prisma.user.findMany({
         where: { managerId: userId },
         select: { id: true }
       });
       const subordinateIds = subordinates.map(sub => sub.id);
-      whereClause = { userId: { in: [...subordinateIds, userId] } };
+      whereClause.userId = { in: [...subordinateIds, userId] };
     }
-    // Admin tidak perlu filter
+    // Filter tanggalVisit jika filter waktu ada
+    if (startDate && endDate) {
+      whereClause.tanggalVisit = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
 
-    // Total customers
-    const totalCustomers = await prisma.customer.count();
+    // Customers manual (tidak usah difilter waktu/user)
+    // Customers manual, milik user (SALES) atau seluruh subordinate+dirinya (MANAGER)
+    let customerWhere = { source: 'MANUAL' };
 
-    // Total visit plans berdasarkan status
+    // Jika filterUserId di-query, tampilkan sesuai user yang difilter
+    if (filterUserId) {
+      customerWhere.createdBy = filterUserId;
+    } else if (role === 'USER') {
+      customerWhere.createdBy = userId;
+    } else if (role === 'MANAGER') {
+      const subordinates = await prisma.user.findMany({
+        where: { managerId: userId },
+        select: { id: true }
+      });
+      const subordinateIds = subordinates.map(sub => sub.id);
+      customerWhere.createdBy = { in: [...subordinateIds, userId] };
+    }
+    // Untuk admin, biarkan tampil semua MANUAL
+
+    const totalCustomers = await prisma.customer.count({ where: customerWhere });
+
+
+    // Total Visit Plans & status breakdown
     const totalVisitPlans = await prisma.visitPlan.count({ where: whereClause });
-    const plannedVisits = await prisma.visitPlan.count({
-      where: { ...whereClause, status: 'PLANNED' }
-    });
-    const completedVisits = await prisma.visitPlan.count({
-      where: { ...whereClause, status: 'COMPLETED' }
-    });
-    const cancelledVisits = await prisma.visitPlan.count({
-      where: { ...whereClause, status: 'CANCELLED' }
-    });
-
-    // Total reports
+    const plannedVisits = await prisma.visitPlan.count({ where: { ...whereClause, status: 'PLANNED' } });
+    const completedVisits = await prisma.visitPlan.count({ where: { ...whereClause, status: 'COMPLETED' } });
+    const cancelledVisits = await prisma.visitPlan.count({ where: { ...whereClause, status: 'CANCELLED' } });
     const totalReports = await prisma.visitReport.count();
 
     // Revenue summary
     const visitPlans = await prisma.visitPlan.findMany({
       where: whereClause,
-      select: { revenueTarget: true }
+      select: { id: true, revenueTarget: true }
     });
-    const totalRevenueTarget = visitPlans.reduce((sum, vp) => sum + (vp.revenueTarget || 0), 0);
+    const totalRevenueTarget = visitPlans.reduce((sum, vp) =>
+      sum + (vp.revenueTarget ? parseFloat(vp.revenueTarget) : 0), 0);
 
-    // Get visit plan IDs berdasarkan whereClause
-    const filteredVisitPlans = await prisma.visitPlan.findMany({
-      where: whereClause,
-      select: { id: true }
-    });
-    const visitPlanIds = filteredVisitPlans.map(vp => vp.id);
+    // Get visit plan IDs for reports query
+    const visitPlanIds = visitPlans.map(vp => vp.id);
 
-    // Get reports berdasarkan visit plan IDs
+    // Filter report by visitPlanId dan, jika ingin, filter tanggalRealisasi (opsional)
+    const reportWhere = visitPlanIds.length > 0 ? { visitPlanId: { in: visitPlanIds } } : undefined;
     const reports = await prisma.visitReport.findMany({
-      where: { visitPlanId: { in: visitPlanIds } }
+      where: reportWhere
     });
 
-    const totalRevenueActual = reports.reduce((sum, r) => {
-      return sum + (r.revenueActual ? parseFloat(r.revenueActual) : 0);
-    }, 0);
+    const totalRevenueActual = reports.reduce((sum, r) =>
+      sum + (r.revenueActual ? parseFloat(r.revenueActual) : 0), 0);
 
-    // Recent activities (5 latest visit plans)
+    // Kategori breakdown
+    const huntingReports = reports.filter(r => r.kategori === 'HUNTING');
+    const farmingReports = reports.filter(r => r.kategori === 'FARMING');
+    const huntingRevenue = huntingReports.reduce((sum, r) =>
+      sum + (r.revenueActual ? parseFloat(r.revenueActual) : 0), 0);
+    const farmingRevenue = farmingReports.reduce((sum, r) =>
+      sum + (r.revenueActual ? parseFloat(r.revenueActual) : 0), 0);
+
+    // Recent activities (latest 5 visit plans)
     const recentVisits = await prisma.visitPlan.findMany({
       where: whereClause,
       take: 5,
@@ -83,11 +109,15 @@ const getDashboardSummary = async (req, res) => {
           completedVisits,
           cancelledVisits,
           totalReports,
-          totalRevenueTarget,
-          totalRevenueActual,
-          revenueAchievement: totalRevenueTarget > 0 
-            ? ((totalRevenueActual / totalRevenueTarget) * 100).toFixed(2) 
-            : 0
+          totalRevenueTarget: parseFloat(totalRevenueTarget),
+          totalRevenueActual: parseFloat(totalRevenueActual),
+          revenueAchievement: totalRevenueTarget > 0
+            ? ((totalRevenueActual / totalRevenueTarget) * 100).toFixed(2)
+            : 0,
+          huntingCount: huntingReports.length,
+          farmingCount: farmingReports.length,
+          huntingRevenue: parseFloat(huntingRevenue),
+          farmingRevenue: parseFloat(farmingRevenue)
         },
         recentVisits
       }

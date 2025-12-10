@@ -11,6 +11,7 @@ router.use(authMiddleware);
 router.get('/', userController.getAllUsers);
 router.get('/subordinates', roleMiddleware('MANAGER', 'ADMIN'), userController.getSubordinates);
 router.get('/:id', userController.getUserById);
+router.post('/', roleMiddleware('ADMIN'), userController.createUser); // ← TAMBAHKAN INI
 router.put('/:id', roleMiddleware('ADMIN'), userController.updateUser);
 router.delete('/:id', roleMiddleware('ADMIN'), userController.deleteUser);
 

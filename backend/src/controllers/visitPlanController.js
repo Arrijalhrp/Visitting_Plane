@@ -1,12 +1,19 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// Helper: Cek apakah visit plan masih bisa diedit (2x24 jam)
-const isEditable = (createdAt) => {
+// Helper: Cek apakah visit plan masih bisa diedit (48h SETELAH visit date)
+const isEditable = (tanggalVisit) => {
   const now = new Date();
-  const diffMs = now - new Date(createdAt);
-  const diffHours = diffMs / (1000 * 60 * 60);
-  return diffHours <= 48; // 2x24 jam = 48 jam
+  const visitDate = new Date(tanggalVisit);
+  
+  // Set visit date to end of day (23:59:59)
+  visitDate.setHours(23, 59, 59, 999);
+  
+  // Add 48 hours after visit date
+  const lockDate = new Date(visitDate.getTime() + (48 * 60 * 60 * 1000));
+  
+  // Can edit if now is before lock date
+  return now <= lockDate;
 };
 
 // Get all visit plans (dengan filter dan pagination)
@@ -65,7 +72,8 @@ const getAllVisitPlans = async (req, res) => {
       orderBy: { tanggalVisit: 'desc' },
       include: {
         user: { select: { id: true, namaLengkap: true } },
-        customer: { select: { id: true, namaCustomer: true } }
+        customer: { select: { id: true, namaCustomer: true } },
+        report: true
       }
     });
 
@@ -84,8 +92,6 @@ const getAllVisitPlans = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch visit plans' });
   }
 };
-
-
 
 // Get single visit plan
 const getVisitPlanById = async (req, res) => {
@@ -115,7 +121,7 @@ const getVisitPlanById = async (req, res) => {
 // Create visit plan
 const createVisitPlan = async (req, res) => {
   try {
-    const { customerId, tanggalVisit, tujuanVisit, programPembahasan, revenueTarget } = req.body;
+    const { customerId, tanggalVisit, tujuanVisit, programPembahasan, revenueTarget, kategori } = req.body;
 
     if (!customerId || !tanggalVisit || !tujuanVisit || !programPembahasan || !revenueTarget) {
       return res.status(400).json({ success: false, message: 'Please complete all required fields' });
@@ -130,6 +136,7 @@ const createVisitPlan = async (req, res) => {
         programPembahasan,
         revenueTarget: parseFloat(revenueTarget),
         status: 'PLANNED',
+        kategori,
         isEditable: true
       }
     });
@@ -141,11 +148,11 @@ const createVisitPlan = async (req, res) => {
   }
 };
 
-// Update visit plan (dengan validasi 2x24 jam)
+// Update visit plan (dengan validasi 48 jam SETELAH visit date untuk USER & MANAGER)
 const updateVisitPlan = async (req, res) => {
   try {
     const { id } = req.params;
-    const { customerId, tanggalVisit, tujuanVisit, programPembahasan, revenueTarget, status } = req.body;
+    const { customerId, tanggalVisit, tujuanVisit, programPembahasan, revenueTarget, status, kategori } = req.body;
 
     // Ambil visit plan yang mau diupdate
     const existingPlan = await prisma.visitPlan.findUnique({ where: { id } });
@@ -154,11 +161,14 @@ const updateVisitPlan = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Visit plan not found' });
     }
 
-    // Cek apakah masih dalam 2x24 jam
-    if (!isEditable(existingPlan.createdAt)) {
+    // ✅ ADMIN bypass 48-hour rule
+    const isAdmin = req.user.role === 'ADMIN';
+    
+    // Cek apakah masih dalam 48 jam SETELAH VISIT DATE (hanya untuk USER & MANAGER)
+    if (!isAdmin && !isEditable(existingPlan.tanggalVisit)) {
       return res.status(403).json({ 
         success: false, 
-        message: 'Cannot edit visit plan after 48 hours (2x24 jam)' 
+        message: 'Cannot edit visit plan after 48 hours from visit date' 
       });
     }
 
@@ -172,7 +182,8 @@ const updateVisitPlan = async (req, res) => {
         programPembahasan,
         revenueTarget: revenueTarget ? parseFloat(revenueTarget) : undefined,
         status,
-        isEditable: isEditable(existingPlan.createdAt)
+        kategori,
+        isEditable: isAdmin ? true : isEditable(tanggalVisit || existingPlan.tanggalVisit)
       }
     });
 

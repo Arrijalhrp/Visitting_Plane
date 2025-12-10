@@ -150,10 +150,67 @@ const getSubordinates = async (req, res) => {
   }
 };
 
+// Create user (Admin only)
+const createUser = async (req, res) => {
+  try {
+    const { username, password, namaLengkap, email, role, managerId } = req.body;
+
+    // Validation
+    if (!username || !password || !namaLengkap || !email || !role) {
+      return res.status(400).json({ success: false, message: 'All fields are required' });
+    }
+
+    // Check if username already exists
+    const existingUser = await prisma.user.findUnique({ where: { username } });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'Username already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        password: hashedPassword,
+        namaLengkap,
+        email,
+        role,
+        managerId: managerId || null
+      },
+      select: {
+        id: true,
+        username: true,
+        namaLengkap: true,
+        email: true,
+        role: true,
+        managerId: true,
+        manager: {
+          select: { id: true, namaLengkap: true }
+        },
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'User created successfully', 
+      data: newUser 
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create user' });
+  }
+};
+
+
 module.exports = {
   getAllUsers,
   getUserById,
   updateUser,
+  createUser, 
   deleteUser,
   getSubordinates
 };
