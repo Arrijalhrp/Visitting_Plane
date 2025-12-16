@@ -8,42 +8,43 @@ const prisma = new PrismaClient();
 // Register new user (Admin only - via middleware)
 const register = async (req, res) => {
   try {
-    const { username, password, namaLengkap, email, role, managerId } = req.body;
+    const { username, password, namaLengkap, email, role, managerId } =
+      req.body;
 
     // Validation
     if (!username || !password || !namaLengkap || !email || !role) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Please provide all required fields' 
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required fields",
       });
     }
 
     // Check if username already exists
     const existingUser = await prisma.user.findUnique({ where: { username } });
-    
+
     if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Username already exists' 
+      return res.status(400).json({
+        success: false,
+        message: "Username already exists",
       });
     }
 
     // Check if email already exists
     const existingEmail = await prisma.user.findUnique({ where: { email } });
-    
+
     if (existingEmail) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email already registered' 
+      return res.status(400).json({
+        success: false,
+        message: "Email already registered",
       });
     }
 
     // Validate role
-    const validRoles = ['USER', 'MANAGER', 'ADMIN'];
+    const validRoles = ["USER", "MANAGER", "ADMIN"];
     if (!validRoles.includes(role)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid role. Must be USER, MANAGER, or ADMIN' 
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role. Must be USER, MANAGER, or ADMIN",
       });
     }
 
@@ -58,7 +59,7 @@ const register = async (req, res) => {
         namaLengkap,
         email,
         role,
-        managerId: managerId || null
+        managerId: managerId || null,
       },
       select: {
         id: true,
@@ -67,21 +68,20 @@ const register = async (req, res) => {
         email: true,
         role: true,
         managerId: true,
-        createdAt: true
-      }
+        createdAt: true,
+      },
     });
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
-      data: newUser
+      message: "User registered successfully",
+      data: newUser,
     });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ success: false, message: 'Registration failed' });
+    console.error("Register error:", error);
+    res.status(500).json({ success: false, message: "Registration failed" });
   }
 };
-
 
 // Login
 const login = async (req, res) => {
@@ -127,6 +127,7 @@ const login = async (req, res) => {
     }
 
     // Generate JWT token
+    console.log("JWT_SECRET from env:", JSON.stringify(process.env.JWT_SECRET));
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
